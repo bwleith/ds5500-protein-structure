@@ -25,6 +25,7 @@ import sys
 from matplotlib import pyplot as plt
 
 from preprocess import dataload
+from protein_data import ProteinData
 
 timestr = time.strftime("%Y%m%d_%H%M%S")
 
@@ -41,6 +42,7 @@ parser.add_argument("--sst", help = "sst type", type = str, default = 'sst3')
 parser.add_argument("--model_config", help = "model configuration", type = str, default = 'GRU_64_GRU_32')
 parser.add_argument("--epochs", help = "number of epochs", type = int, default = 10)
 parser.add_argument("--batch_size", help = "batch size", type = int, default = 128)
+parser.add_argument("--maxlen", help="maximum sequence length", type=int, default=300)
 args = parser.parse_args()
 
 path = args.path
@@ -49,11 +51,14 @@ sst = args.sst
 model_config = args.model_config
 epochs = args.epochs
 batch_size = args.batch_size
+maxlen = args.maxlen
 
 
 
 
-train_sequences, valid_sequences, test_sequences, y, maxlen = dataload(path, kmer)
+# train_sequences, valid_sequences, test_sequences, y, maxlen = dataload(path, kmer)
+
+data = ProteinData(df = pd.read_csv(path), target = sst, n = kmer, maxlen = maxlen)
 
 # Build the model for predicting the SSTsequence
 
@@ -66,7 +71,7 @@ def get_model(model_config):
     model = Sequential()
     
     # add an Embedding layer to the model
-    model.add(Embedding(input_dim = y[sst]['n_words'], output_dim = 128, input_length = maxlen))
+    model.add(Embedding(input_dim = data.n_words, output_dim = 128, input_length = maxlen))
     
     # initialize a counter for looping through the input_list
     i = 0
@@ -75,15 +80,20 @@ def get_model(model_config):
     while i < len(input_list):
         if input_list[i] == "GRU":
             # add a Bidirectional GRU layer to the model
-            model.add(Bidirectional(GRU(units = int(input_list[i + 1]), return_sequences = True, recurrent_dropout = 0)))
-            i += 2
+            model.add(Bidirectional(GRU(units = int(input_list[i + 1]), return_sequences = True)))
         elif input_list[i] == "LSTM":
             # add a Bidirectional LSTM layer to the model
-            model.add(Bidirectional(LSTM(units = int(input_list[i + 1]), return_sequences = True, recurrent_dropout = 0)))
-            i += 2
+            model.add(Bidirectional(LSTM(units = int(input_list[i + 1]), return_sequences = True)))
+        elif input_list[i] == "Dense":
+            # add a TimeDistributed Dense layer to the model 
+            model.add(TimeDistributed(Dense(units=int(input_list[i + 1]), activation='relu')))
+        elif input_list[i] == "Dropout":
+            # add a TimeDistributed Dropout layer to the model
+            model.add(TimeDistributed(Dropout(float(input_list[i + 1])/100)))
+        i += 2
     
     # add a TimeDistributed dense layer with a softmax activation to the model
-    model.add(TimeDistributed(Dense(y[sst]['n_ssts'], activation = 'softmax')))
+    model.add(TimeDistributed(Dense(data.n_ssts, activation = 'softmax')))
     
     # return the constructed model
     return model
@@ -117,23 +127,23 @@ def q3_acc(y_true, y_pred):
 model.compile(optimizer = "adam", loss = "categorical_crossentropy", metrics = ["accuracy", q3_acc])
 
 # training the model
-hist = model.fit(train_sequences, 
-          y[sst]['train_sequences'], 
+hist = model.fit(data.train_sequences, 
+          data.y_train_sequences, 
           batch_size = batch_size, 
           epochs = epochs, 
-          validation_data = (valid_sequences, 
-                             y[sst]['valid_sequences']), 
+          validation_data = (data.valid_sequences, 
+                             data.y_valid_sequences), 
           verbose = 1)
 
 
 # get test set predictions
-test_preds = model.predict(test_sequences)
+test_preds = model.predict(data.test_sequences)
 
 # compute overall Q3 Accuracy
 q3 = 0
 total_count = 0
 for i, pred in enumerate(test_preds):
-    acc = q3_acc(y[sst]['test_sequences'][i], pred)
+    acc = q3_acc(data.y_test_sequences[i], pred)
     q3 += np.sum(acc)
     total_count += len(acc)
     
