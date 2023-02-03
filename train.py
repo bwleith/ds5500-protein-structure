@@ -16,7 +16,6 @@ from tensorflow.keras.layers import GRU, Embedding, Dense, TimeDistributed, Bidi
 from sklearn.model_selection import train_test_split
 from keras import backend as K
 
-
 import logging
 import time
 import os
@@ -24,7 +23,6 @@ import sys
 
 from matplotlib import pyplot as plt
 
-from preprocess import dataload
 from protein_data import ProteinData
 
 timestr = time.strftime("%Y%m%d_%H%M%S")
@@ -53,16 +51,9 @@ epochs = args.epochs
 batch_size = args.batch_size
 maxlen = args.maxlen
 
-
-
-
-# train_sequences, valid_sequences, test_sequences, y, maxlen = dataload(path, kmer)
-
 data = ProteinData(df = pd.read_csv(path), target = sst, n = kmer, maxlen = maxlen)
 
 # Build the model for predicting the SSTsequence
-
-
 def get_model(model_config):
     # split the input string into a list
     input_list = model_config.split("_")
@@ -113,7 +104,6 @@ model.summary()
 
 # Train the model
 
-
 # Q3 Accuracy Implementation from https://www.kaggle.com/code/helmehelmuto/secondary-structure-prediction-with-keras/notebook
 # "SS prediction is usually evaluated by Q3 or Q8 accuracy, which measures the percent of residues for which 3-state or 8-state 
 # secondary structure is correctly predicted"  (doi: 10.1038/srep18962)
@@ -122,7 +112,6 @@ def q3_acc(y_true, y_pred):
     y_ = tf.argmax(y_pred, axis=-1)
     mask = tf.greater(y, 0)
     return K.cast(K.equal(tf.boolean_mask(y, mask), tf.boolean_mask(y_, mask)), K.floatx())
-
 
 model.compile(optimizer = "adam", loss = "categorical_crossentropy", metrics = ["accuracy", q3_acc])
 
@@ -134,7 +123,6 @@ hist = model.fit(data.train_sequences,
           validation_data = (data.valid_sequences, 
                              data.y_valid_sequences), 
           verbose = 1)
-
 
 # get test set predictions
 test_preds = model.predict(data.test_sequences)
