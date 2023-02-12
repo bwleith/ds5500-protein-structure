@@ -31,13 +31,14 @@ class ProteinData:
     n_ssts: int 
     target: str
     maxlen: int
+    kmer: int
 
     # converts a sequence representing primary protein structure into k-mers (aka n-grams)
     # this can be a useful preprocessing step for improving the predictive capability of 
     # the model
     def _seqtokmers(self, 
                     seqs: pd.core.series.Series, 
-                    n: Optional[int] = 3): 
+                    n: int): 
 
         return np.array([[seq[i:i+n] for i in range(len(seq))] for seq in seqs], dtype = object)
 
@@ -68,17 +69,17 @@ class ProteinData:
     def __init__(self, 
                  df: pd.DataFrame, 
                  target: str,
-                 random_state: Optional[int] = 42,
-                 n: Optional[int] = 3, 
+                 n: int,
+                 random_state: Optional[int] = 42, 
                  maxlen: Optional[int] = None):
         
         # split the data 80/10/10 train/validation/test
         split = self._split_data(df = df, target = target) 
         
         # convert the primary protein sequences into k-mers (i.e. n-grams)
-        train_kmers = self._seqtokmers(seqs = split['X_train'], n = 3)
-        valid_kmers = self._seqtokmers(seqs = split['X_valid'], n = 3)
-        test_kmers  = self._seqtokmers(seqs = split['X_test'],  n = 3)
+        train_kmers = self._seqtokmers(seqs = split['X_train'], n=n)
+        valid_kmers = self._seqtokmers(seqs = split['X_valid'], n=n)
+        test_kmers  = self._seqtokmers(seqs = split['X_test'],  n=n)
 
         # find the longest sequence length across all of the 
         # data if we are not filtering to sequences of a given

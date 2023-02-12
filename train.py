@@ -51,7 +51,10 @@ epochs = args.epochs
 batch_size = args.batch_size
 maxlen = args.maxlen
 
-data = ProteinData(df = pd.read_csv(path), target = sst, n = kmer, maxlen = maxlen)
+df = pd.read_csv(path)
+df = df.query(f'len_x >= {100} & len_x <= {300}')
+
+data = ProteinData(df = df, target = sst, n = kmer, maxlen = maxlen)
 
 # Build the model for predicting the SSTsequence
 def get_model(model_config):
@@ -113,15 +116,69 @@ def q3_acc(y_true, y_pred):
     mask = tf.greater(y, 0)
     return K.cast(K.equal(tf.boolean_mask(y, mask), tf.boolean_mask(y_, mask)), K.floatx())
 
+vloss = []
+vacc = []
+vq3 = []
+nume = []
+
 model.compile(optimizer = "adam", loss = "categorical_crossentropy", metrics = ["accuracy", q3_acc])
+
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=newpath, histogram_freq=1)
+
+
+class valCallback(tf.keras.callbacks.Callback):
+    def __init__(self, Model, batch_size):
+        self.Model = Model
+        self.batch_size = batch_size
+    def on_epoch_end(self, epoch, logs={}):
+        if (epoch+1) % 1 == 0:
+            # print('\nModel: ', self.Model.name)
+            val_loss, val_accuracy, val_q3_acc = self.Model.evaluate(data.valid_sequences, data.y_valid_sequences, steps=data.valid_sequences.shape[0]//batch_size, verbose=0)
+            print('\nval_loss: ', val_loss)
+            print('val_accuracy: ', val_accuracy)
+            print('val_q3_acc: ', val_q3_acc)
+            nume.append(epoch+1)
+            vloss.append(val_loss)
+            vacc.append(val_accuracy)
+            vq3.append(val_q3_acc)
+            print('\n')
+            plt.figure()
+            plt.plot(nume, vloss, 'r', label='val_loss')
+            plt.title('val loss for ' + model_config)
+            plt.ylabel('loss')
+            plt.xlabel('epoch')
+            plt.grid()
+            plt.savefig(newpath + '/loss.png')
+            plt.close()
+            plt.plot(nume, vacc, 'b', label='val_accuracy')
+            plt.plot(nume, vq3, 'g', label='val_q3_acc')
+            plt.title('model accuracy for ' + model_config)
+            plt.ylabel('accuracy')
+            plt.xlabel('epoch')
+            plt.grid()
+            plt.legend(['val acc', 'val q3 acc'])
+            plt.savefig(newpath + '/val_acc.png')
+
+validation_callback = valCallback(Model=model, batch_size=batch_size)
+
+save_name = str(newpath) + '/cp.ckpt'
+save = tf.keras.callbacks.ModelCheckpoint(
+    save_name,
+    verbose=1,
+    save_weights_only=True,
+    save_freq= (data.train_sequences.shape[0] // batch_size) * 10
+)
+
+
 
 # training the model
 hist = model.fit(data.train_sequences, 
           data.y_train_sequences, 
           batch_size = batch_size, 
           epochs = epochs, 
-          validation_data = (data.valid_sequences, 
-                             data.y_valid_sequences), 
+        #   validation_data = (data.valid_sequences, 
+        #                      data.y_valid_sequences), 
+          callbacks = [validation_callback, save],
           verbose = 1)
 
 # get test set predictions
@@ -139,17 +196,10 @@ print('Test Set Q3 Accuracy: ', np.round(q3 / total_count, 2))
 
 print('This case was ', model_config)
 
-# Plot the validation accuracy and training loss
-plt.plot(hist.history['val_accuracy'])
-plt.plot(hist.history['val_q3_acc'])
-plt.title('model accuracy')
-plt.ylabel('accuracy')
-plt.xlabel('epoch')
-plt.legend(['val acc', 'val q3 acc'])
-plt.savefig(newpath + '/val_acc.png')
+# Plot the training loss
 plt.close()
 plt.plot(hist.history['loss'])
 plt.title('training loss for ' + model_config)
 plt.ylabel('loss')
 plt.xlabel('epoch')
-plt.savefig(newpath + '/loss.png')
+plt.savefig(newpath + '/trainloss.png')
